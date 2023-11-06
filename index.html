@@ -1,1 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Temperature Visualization</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        /* Your existing styles */
+        svg.map {
+            display: block;
+            margin-bottom: 10%;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        div {
+            position: absolute;
+            bottom: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 12px;
+        }
+        footer {
+            text-align: center;
+            margin-top: 10px;
+            font-size: 12px;
+        }
+        .slider {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+    </style>
+</head>
+<body>
+    <h1>Monthly Average Temperature by Country</h1>
+    <svg class="map" id="map" width="1400" height="600"></svg>
+    <input type="range" min="0" max="304" value="0" class="slider" id="dateSlider">
+    <div> Data source: <a href="https://www.kaggle.com/datasets/die9origephit/fifa-world-cup-2022-complete-dataset" target="_blank">Temperature Dataset</a><br>
+        GeoJSON source: <a href="https://geojson-maps.ash.ms/" target="_blank">geojson-maps.ash.ms</a></div>
+    <footer>Use the slider to change the date.</footer>
+    <script>
+        const svgMap = d3.select("#map");
+        const widthMap = +svgMap.attr("width");
+        const heightMap = +svgMap.attr("height");
+        const slider = d3.select("#dateSlider");
+
+        const projection = d3.geoMercator()
+            .scale(150)
+            .translate([widthMap / 2, heightMap / 1.5]);
+        const path = d3.geoPath().projection(projection);
+        const colorScale = d3.scaleSequential(d3.interpolateRdYlBu);
+
+        let currentData = {};
+        let dateIndices = {};
+
+        // Load both the GeoJSON and the CSV
+        Promise.all([
+            d3.json("custom.geo.json"), // Replace with your actual path to the GeoJSON file
+            d3.csv("monthly_city_temperature.csv") // Replace with your actual path to the CSV file
+        ]).then(([geoData, tempData]) => {
+            // Process temperature data
+            tempData.forEach((row, index) => {
+                const country = row.Country.toUpperCase();
+                const date = row.YearMonth;
+                if (!currentData[country]) {
+                    currentData[country] = {};
+                }
+                currentData[country][date] = +row.MonthlyAvgTemp;
+                dateIndices[date] = index;
+            });
+
+            // Set up the color scale domain based on the temperature range
+            const temps = tempData.map(d => +d.MonthlyAvgTemp);
+            colorScale.domain(d3.extent(temps).reverse());
+
+            // Initial map drawing
+            svgMap.selectAll("path")
+                .data(geoData.features)
+                .join("path")
+                .attr("d", path)
+                .attr("fill", d => {
+                    const countryName = d.properties.name.toUpperCase();
+                    const countryData = currentData[countryName];
+                    return countryData ? colorScale(countryData[Object.keys(countryData)[0]]) : '#ccc';
+                })
+                .attr("stroke", "#fff")
+                .attr("stroke-width", 0.5);
+
+            // Update slider attributes based on data
+            slider.attr("max", Object.keys(dateIndices).length - 1);
+
+            // Slider interaction
+            slider.on("input", function() {
+                updateMap(this.value);
+            });
+
+            // Function to update the map based on the slider value
+            function updateMap(sliderValue) {
+                // Determine the date from the slider value
+                const date = Object.keys(dateIndices)[sliderValue];
+
+                svgMap.selectAll("path")
+                    .transition()
+                    .duration(200)
+                    .attr("fill", d => {
+                        const countryName = d.properties.name.toUpperCase();
+                        const temp = currentData[countryName] ? currentData[countryName][date] : null;
+                        return temp ? colorScale(temp) : '#ccc';
+                    });
+            }
+        });
+    </script>
+</body>
+</html>
 
