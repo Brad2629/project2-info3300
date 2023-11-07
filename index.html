@@ -5,7 +5,6 @@
     <title>Temperature Visualization</title>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <style>
-        /* Your existing styles */
         svg.map {
             display: block;
             margin-bottom: 10%;
@@ -14,33 +13,73 @@
             text-align: center;
             margin-bottom: 20px;
         }
-        div {
+        .source-info {
             position: absolute;
-            bottom: 60px;
+            bottom: 5px; 
             left: 50%;
             transform: translateX(-50%);
-            font-size: 12px;
-        }
-        footer {
-            text-align: center;
-            margin-top: 10px;
-            font-size: 12px;
+            font-size: 10px;
+            text-align: center; 
         }
         .slider {
+            width: 1000px; 
             position: absolute;
+            height: 10px; 
+            cursor: pointer;
             bottom: 30px;
             left: 50%;
             transform: translateX(-50%);
+        } 
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed; /* Stay in place */
+            z-index: 1; /* Sit on top */
+            left: 0;
+            top: 0;
+            width: 100%; /* Full width */
+            height: 100%; /* Full height */
+            overflow: auto; /* Enable scroll if needed */
+            background-color: rgb(0,0,0); /* Fallback color */
+            background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 15% auto; /* 15% from the top and centered */
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%; /* Could be more or less, depending on screen size */
+        }
+
+        .close-button {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+
+        .close-button:hover,
+        .close-button:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
         }
     </style>
 </head>
 <body>
     <h1>Monthly Average Temperature by Country</h1>
     <svg class="map" id="map" width="1400" height="600"></svg>
+    <div id="tooltip" style="display: none; position: absolute; background-color: white; padding: 4px; border: 1px solid black; border-radius: 4px; pointer-events: none;"></div>
     <input type="range" min="0" max="304" value="0" class="slider" id="dateSlider">
-    <div> Data source: <a href="https://www.kaggle.com/datasets/die9origephit/fifa-world-cup-2022-complete-dataset" target="_blank">Temperature Dataset</a><br>
-        GeoJSON source: <a href="https://geojson-maps.ash.ms/" target="_blank">geojson-maps.ash.ms</a></div>
-    <footer>Use the slider to change the date.</footer>
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <span class="close-button">×</span>
+            <h2>Cities and Temperatures</h2>
+            <div id="modal-body"></div>
+        </div>
+    </div>
+    <div class="source-info"> Data source: <a href="https://www.kaggle.com/datasets/sudalairajkumar/daily-temperature-of-major-cities/" target="_blank">Temperature Dataset</a><br>
+        GeoJSON source: <a href="https://geojson-maps.ash.ms/" target="_blank">GeoJson Map</a></div>
     <script>
         const svgMap = d3.select("#map");
         const widthMap = +svgMap.attr("width");
@@ -56,19 +95,22 @@
         let currentData = {};
         let dateIndices = {};
 
-        // Load both the GeoJSON and the CSV
         Promise.all([
-            d3.json("custom.geo.json"), // Replace with your actual path to the GeoJSON file
-            d3.csv("monthly_city_temperature.csv") // Replace with your actual path to the CSV file
+            d3.json("custom.geo.json"), 
+            d3.csv("monthly_city_temperature.csv") 
         ]).then(([geoData, tempData]) => {
             // Process temperature data
             tempData.forEach((row, index) => {
                 const country = row.Country.toUpperCase();
+                const city = row.City;
                 const date = row.YearMonth;
                 if (!currentData[country]) {
                     currentData[country] = {};
                 }
-                currentData[country][date] = +row.MonthlyAvgTemp;
+                if (!currentData[country][city]) {
+                    currentData[country][city] = {};
+                }
+                currentData[country][city][date] = +row.MonthlyAvgTemp;
                 dateIndices[date] = index;
             });
 
@@ -84,33 +126,148 @@
                 .attr("fill", d => {
                     const countryName = d.properties.name.toUpperCase();
                     const countryData = currentData[countryName];
-                    return countryData ? colorScale(countryData[Object.keys(countryData)[0]]) : '#ccc';
+                    if (countryData) {
+                        const firstCity = Object.keys(countryData)[0];
+                        const firstCityData = countryData[firstCity];
+                        const firstDate = Object.keys(firstCityData)[0];
+                        return colorScale(firstCityData[firstDate]);
+                    }
+                    return '#fff'; 
                 })
-                .attr("stroke", "#fff")
-                .attr("stroke-width", 0.5);
+                .attr("stroke", "#000")
+                .attr("stroke-width", 0.1)
 
             // Update slider attributes based on data
             slider.attr("max", Object.keys(dateIndices).length - 1);
 
+
+            const tooltip = d3.select("#tooltip");
             // Slider interaction
-            slider.on("input", function() {
+            slider.on("input", function(event) {
                 updateMap(this.value);
+            }).on("mouseover", function(event) {
+                tooltip.style("display", "block");
+                updateTooltip(event, this);
+            }).on("mousemove", function(event) {
+                updateTooltip(event, this);
+            }).on("mouseout", function() {
+                tooltip.style("display", "none");
             });
+
+            function updateTooltip(event, sliderElement) {
+                const sliderValue = sliderElement.value;
+                const date = Object.keys(dateIndices)[sliderValue];
+
+                // Calculate the position of the tooltip based on the slider handle
+                const sliderRect = sliderElement.getBoundingClientRect();
+                const tooltipX = sliderRect.left + (sliderRect.width * (sliderValue / sliderElement.max)) - tooltip.node().offsetWidth / 2;
+                const tooltipY = sliderRect.top - 30; 
+
+                // Update tooltip position and text
+                tooltip.style("left", tooltipX + "px")
+                    .style("top", window.scrollY + tooltipY + "px") 
+                    .text(`Date: ${date}`);
+            }
+            
+            // Function to show the modal with city temperatures
+            function showModal(countryName, countryCities, date) {
+                const modal = document.getElementById("modal");
+                const modalBody = document.getElementById("modal-body");
+                const closeButton = document.querySelector(".close-button");
+
+                // Clear previous content
+                modalBody.innerHTML = '';
+
+                // Add city temperatures to the modal body
+                for (const city in countryCities) {
+                    const cityData = countryCities[city];
+                    const temp = cityData[date] ? cityData[date].toFixed(2) + "°F" : "N/A";
+                    modalBody.innerHTML += `<p>${city}: ${temp}</p>`;
+                }
+
+                // Show the modal
+                modal.style.display = "block";
+
+                // Close the modal on button click
+                closeButton.onclick = function() {
+                    modal.style.display = "none";
+                };
+            }
+
+            let currentDateIndex = 0;
 
             // Function to update the map based on the slider value
             function updateMap(sliderValue) {
-                // Determine the date from the slider value
+                // Update the current date index every time the slider is moved
+                currentDateIndex = sliderValue;
                 const date = Object.keys(dateIndices)[sliderValue];
-
+                
                 svgMap.selectAll("path")
                     .transition()
                     .duration(200)
                     .attr("fill", d => {
                         const countryName = d.properties.name.toUpperCase();
-                        const temp = currentData[countryName] ? currentData[countryName][date] : null;
-                        return temp ? colorScale(temp) : '#ccc';
+                        const countryData = currentData[countryName];
+                        if (countryData) {
+                            // Sum temperatures of all cities and calculate average
+                            let sumTemp = 0;
+                            let cityCount = 0;
+                            for (const city in countryData) {
+                                if (countryData[city][date] !== undefined) {
+                                    sumTemp += countryData[city][date];
+                                    cityCount++;
+                                }
+                            }
+                            const avgTemp = cityCount > 0 ? sumTemp / cityCount : null;
+                            return avgTemp ? colorScale(avgTemp) : '#fff';
+                        }
+                        return '#fff'; // Default fill color if no data
                     });
             }
+            svgMap.selectAll("path")
+                .on("mouseover", function(event, d) {
+                    const countryName = d.properties.name.toUpperCase();
+                    const date = Object.keys(dateIndices)[currentDateIndex]; // Use the current date index
+                    const countryData = currentData[countryName];
+                    if (countryData) {
+                        // Calculate the average temperature for the tooltip
+                        let sumTemp = 0;
+                        let cityCount = 0;
+                        for (const city in countryData) {
+                            if (countryData[city][date] !== undefined) {
+                                sumTemp += countryData[city][date];
+                                cityCount++;
+                            }
+                        }
+                        const avgTemp = cityCount > 0 ? (sumTemp / cityCount).toFixed(2) : "N/A";
+                        tooltip.style("display", "block")
+                            .html(`${countryName}: ${avgTemp}°F`)
+                            .style("left", (event.pageX + 10) + "px") 
+                            .style("top", (event.pageY + 10) + "px"); 
+                    } else {
+                        tooltip.style("display", "block")
+                            .html(`${countryName}: N/A`)
+                            .style("left", (event.pageX + 10) + "px") 
+                            .style("top", (event.pageY + 10) + "px"); 
+                    }
+                })
+                .on("mouseout", function() {
+                    tooltip.style("display", "none");
+                })
+                .on("click", function(event, d) {
+                    const countryName = d.properties.name.toUpperCase();
+                    const countryCities = currentData[countryName];
+                    const date = Object.keys(dateIndices)[currentDateIndex]; // Use the current date index
+                    if (countryCities) {
+                        showModal(countryName, countryCities, date);
+                    }
+                });
+            window.onclick = function(event) {
+                const modal = document.getElementById("modal");
+                if (event.target == modal) {
+                    modal.style.display = "none";
+                }
+            };
         });
     </script>
 </body>
