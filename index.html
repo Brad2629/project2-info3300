@@ -57,7 +57,10 @@
             border: 2px solid #fff; 
             box-shadow: 0 0 5px #000; 
         }
-        .slider::-webkit-slider-thumb:hover, .slider::-moz-range-thumb:hover {
+        .slider::-webkit-slider-thumb:hover {
+            background: #6790c1; 
+        }
+        .slider::-moz-range-thumb:hover {
             background: #6790c1; 
         }
         .modal {
@@ -113,15 +116,23 @@
         .radio-button {
             position: absolute;
             left: 30px;
-            top: 80px;
-            border: 1px solid #ccc; /* Gray border */
-            padding: 10px; /* Some padding inside the box */
-            background-color: #f9f9f9; /* Light gray background */
+            top: 70px;
+            border: 1px solid #ccc; 
+            padding: 10px; 
+            background-color: #f9f9f9; 
         }
         .radio-option {
-        display: flex; /* Aligns items on the same line */
-        align-items: center; /* Centers items vertically */
-        margin-bottom: 5px; /* Adds a little space between each radio button */
+        display: flex; 
+        align-items: center; 
+        margin-bottom: 5px; 
+        }
+        #globalTempDisplay {
+            position: absolute;
+            left: 30px;
+            top: 150px;
+            border: 1px solid #ccc; 
+            padding: 10px; 
+            background-color: #f9f9f9; 
         }
     </style>
 </head>
@@ -149,7 +160,10 @@
             <input type="radio" id="yearly" name="temperatureMode" value="yearly">
             <label for="yearly">Yearly Average Temperature</label>
         </div>
-    </div>  
+    </div> 
+    <div id="globalTempDisplay">
+        Global Average Temperature: <span id="globalTempValue">N/A</span>
+    </div>
     <div class="source-info"> Data source: <a href="https://www.kaggle.com/datasets/sudalairajkumar/daily-temperature-of-major-cities/" target="_blank">Temperature Dataset</a><br>
         GeoJSON source: <a href="https://geojson-maps.ash.ms/" target="_blank">GeoJson Map</a></div>
     <script>
@@ -223,6 +237,36 @@
                         document.getElementById("dateDisplay").innerText = `Year: ${years[this.value]}`;
                     });
 
+            function updateGlobalTemperature(date, mode) {
+                let sumTemp = 0, count = 0;
+                if (mode === "monthly") {
+                    for (const country in currentData) {
+                        for (const city in currentData[country]) {
+                            const temp = currentData[country][city][date];
+                            if (temp !== undefined) {
+                                sumTemp += temp;
+                                count++;
+                            }
+                        }
+                    }
+                } else { // yearly mode
+                    for (const country in yearlyData) {
+                        for (const city in yearlyData[country]) {
+                            const temp = yearlyData[country][city][date];
+                            if (temp !== undefined) {
+                                sumTemp += temp;
+                                count++;
+                            }
+                        }
+                    }
+                }
+                const avgTemp = count > 0 ? (sumTemp / count).toFixed(2) : "N/A";
+                document.getElementById("globalTempValue").innerText = `${avgTemp}°F`;
+            }
+            const initialDate = Object.keys(dateIndices)[0];
+            updateGlobalTemperature(initialDate, 'monthly');
+
+
             // Set up the color scale domain based on the temperature range
             const temps = tempData.map(d => +d.MonthlyAvgTemp);
             colorScale.domain(d3.extent(temps).reverse());
@@ -285,12 +329,21 @@
                     .attr("transform", `translate(${legendWidth},0)`)
                     .call(legendAxis);
 
+            function formatDate(dateString) {
+                const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+                const parts = dateString.split('-');
+                const year = parts[0];
+                const monthIndex = parseInt(parts[1], 10) - 1;
+                return `${months[monthIndex]} ${year}`;
+            }
 
             // Update slider attributes based on data
             slider.attr("max", Object.keys(dateIndices).length - 1);
 
             const startingDate = Object.keys(dateIndices)[0];
-            document.getElementById("dateDisplay").innerText = `Date: ${startingDate}`;
+            const formattedDate = formatDate(startingDate);
+            document.getElementById("dateDisplay").innerText = `Date: ${formattedDate}`;
+
 
             const tooltip = d3.select("#tooltip");
             // // Slider interaction
@@ -328,7 +381,8 @@
                 if (this.checked) {
                     document.getElementById('pageTitle').innerText = 'Monthly Average Temperature by Country';
                     const startingDate = Object.keys(dateIndices)[0];
-                    document.getElementById("dateDisplay").innerText = `Date: ${startingDate}`;
+                    const formattedDate = formatDate(startingDate); 
+                    document.getElementById("dateDisplay").innerText = `Date: ${formattedDate}`;
                     updateMap(slider.property("value"));
                 }
             });
@@ -386,7 +440,9 @@
             // Function to update the map based on the slider value
             function updateMap(sliderValue) {
                 const date = Object.keys(dateIndices)[sliderValue];
-                document.getElementById("dateDisplay").innerText = `Date: ${date}`;
+                const formattedDate = formatDate(date); // Use the new function to format the date
+                document.getElementById("dateDisplay").innerText = `Date: ${formattedDate}`;
+                updateGlobalTemperature(date, 'monthly');
 
                 svgMap.selectAll("path")
                     .transition()
@@ -412,7 +468,7 @@
             }
 
             function updateMapWithYearlyData(selectedYear) {
-                console.log("Selected Year:", selectedYear);
+                updateGlobalTemperature(selectedYear, 'yearly');
                 svgMap.selectAll("path")
                     .transition()
                     .duration(200)
