@@ -134,6 +134,15 @@
             padding: 10px; 
             background-color: #f9f9f9; 
         }
+
+        #globalChangeDisplay {
+            display: none;
+        }
+
+        #globalAvgDisplay {
+            display:none;
+        }
+
     </style>
 </head>
 <body>
@@ -162,7 +171,9 @@
         </div>
     </div> 
     <div id="globalTempDisplay">
-        Global Average Temperature: <span id="globalTempValue">N/A</span>
+       <div>Global Average Temperature: <span id="globalTempValue">N/A</span></div>
+       <div id="globalChangeDisplay">Change from Last Year: <span id="globalChangeValue">N/A</span></div>
+       <div id="globalAvgDisplay">Deviation from Average Temperature <span id="globalAvgValue">N/A</span></div>
     </div>
     <div class="source-info"> Data source: <a href="https://www.kaggle.com/datasets/sudalairajkumar/daily-temperature-of-major-cities/" target="_blank">Temperature Dataset</a><br>
         GeoJSON source: <a href="https://geojson-maps.ash.ms/" target="_blank">GeoJson Map</a></div>
@@ -227,6 +238,17 @@
                 });
             });
 
+            allTemps = [] //building array of all temperatures to get average temperature
+            tempData.forEach( (d) => {
+                allTemps.push(d.MonthlyAvgTemp)
+            });
+
+            tempSum = 0; //inspired by: https://stackoverflow.com/questions/29544371/finding-the-average-of-an-array-using-js
+            for(i=0; i < allTemps.length; i++) {
+                tempSum += Number(allTemps[i]);
+            };
+            const totalAvgTemp = (tempSum/allTemps.length);
+
             years = Array.from(allYears).sort((a, b) => a - b);
             const yearSlider = d3.select("#yearSlider");
             yearSlider.attr("min", 0)
@@ -248,7 +270,8 @@
                                 count++;
                             }
                         }
-                    }
+                    };
+                
                 } else { // yearly mode
                     for (const country in yearlyData) {
                         for (const city in yearlyData[country]) {
@@ -259,10 +282,69 @@
                             }
                         }
                     }
-                }
+                };
+
                 const avgTemp = count > 0 ? (sumTemp / count).toFixed(2) : "N/A";
                 document.getElementById("globalTempValue").innerText = `${avgTemp}°F`;
-            }
+
+
+                if (mode === "yearly") {
+                    document.getElementById("globalChangeDisplay").style.display = "block";
+                    document.getElementById("globalAvgDisplay").style.display = "block";
+                };
+
+                if (mode === "monthly") {
+                    document.getElementById("globalChangeDisplay").style.display = "none";
+                    document.getElementById("globalAvgDisplay").style.display = "none";
+                };
+
+                const deviationTemp = (avgTemp - totalAvgTemp).toFixed(2);
+                if (deviationTemp < 0) {
+                    document.getElementById("globalAvgValue").innerText = `${Math.abs(deviationTemp)}°F colder`;
+                };
+
+                if (deviationTemp > 0) {
+                    document.getElementById("globalAvgValue").innerText = `${Math.abs(deviationTemp)}°F warmer`;
+                ;}
+
+                if (deviationTemp === 0) {
+                    document.getElementById("globalAvgValue").innerText = `${Math.abs(deviationTemp)}°F`;
+                };
+
+                let changeTemp = 0, changeCount = 0;
+
+                for (const changeCountry in yearlyData) {
+                        for (const changeCity in yearlyData[changeCountry]) {
+                            const secondTemp = yearlyData[changeCountry][changeCity][date-1];
+                            if (secondTemp !== undefined) {
+                                changeTemp += secondTemp;
+                                changeCount++;
+                            }
+                        }
+                    };
+
+                const lastYearTemp = count > 0 ? (changeTemp / changeCount).toFixed(2) : "N/A";
+                const changeAvgTemp = (avgTemp - lastYearTemp).toFixed(2);
+
+                if (changeAvgTemp < 0) {
+                    document.getElementById("globalChangeValue").innerText = `${Math.abs(changeAvgTemp)}°F colder`;
+                };
+
+                if (changeAvgTemp > 0) {
+                    document.getElementById("globalChangeValue").innerText = `${Math.abs(changeAvgTemp)}°F warmer`;
+                };
+
+                if (changeAvgTemp === 0) {
+                    document.getElementById("globalChangeValue").innerText = `${Math.abs(changeAvgTemp)}°F`;
+                };
+
+                if (date == Number(1995)) {
+                    document.getElementById("globalChangeValue").innerText = `N/A`;
+                };
+                
+              
+
+            };
             const initialDate = Object.keys(dateIndices)[0];
             updateGlobalTemperature(initialDate, 'monthly');
 
