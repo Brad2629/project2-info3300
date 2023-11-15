@@ -637,7 +637,7 @@
 
                     let date;
                     if (mode === "monthly") {
-                        date = Object.keys(dateIndices)[currentDateIndex];
+                        date = Object.keys(dateIndices)[slider.property("value")]; //used to be currentDateIndex
                     } else {
                         date = years[yearSlider.property("value")];
                     }
