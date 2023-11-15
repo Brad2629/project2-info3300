@@ -589,7 +589,7 @@
 
                     let avgTemp;
                     if (mode === "monthly") {
-                        const date = Object.keys(dateIndices)[currentDateIndex];
+                        const date = Object.keys(dateIndices)[slider.property("value")]; //used to be currentDateIndex
                         const countryData = currentData[countryName];
                         if (countryData) {
                             let sumTemp = 0;
@@ -620,10 +620,11 @@
                             avgTemp = "N/A";
                         }
                     }
+                    
                     tooltip.style("display", "block")
                         .html(`${countryName}: ${avgTemp}°F<br>Click for more details`)
                         .style("left", (event.pageX + 10) + "px") 
-                        .style("top", (event.pageY + 10) + "px"); 
+                        .style("top", (event.pageY + 10) + "px");
                 })
                 .on("mouseout", function() {
                     d3.select(this).transition().duration(100).attr("stroke-width", 0.1);
